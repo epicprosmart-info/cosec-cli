@@ -6,7 +6,7 @@
 fail เมื่อ gate ของ project เป็น `fail`, ดูผลกระทบจาก threat case (`case php2shell`), ตรวจไฟล์ audit ที่เข้ารหัสแบบออฟไลน์
 (`audit verify`) และเชื่อม AI agent ผ่าน MCP bridge (`mcp connect`)
 
-binary เดียว static ไม่ต้องมี runtime สำหรับ **Linux, macOS และ Windows** ทั้ง amd64 และ arm64 — release ล่าสุด: **v1.0.0-rc.1**
+binary เดียว static ไม่ต้องมี runtime สำหรับ **Linux, macOS และ Windows** ทั้ง amd64 และ arm64 — release ล่าสุด: **v1.0.0-rc.2**
 
 > repository นี้แจก **binary เท่านั้น** ไม่มี source code; archive "Source code" ที่ GitHub แนบให้ทุก release โดยอัตโนมัติ
 > มีแค่ไฟล์ที่เห็นในหน้านี้
@@ -59,13 +59,13 @@ brew install epicprosmart-info/tap/cosec-cli      # อัปเกรดภา�
 
 ```sh
 curl -fsSLO https://github.com/epicprosmart-info/cosec-cli/releases/latest/download/install.sh
-sh install.sh                                    # ระบุเวอร์ชัน: COSEC_CLI_VERSION=v1.0.0-rc.1 sh install.sh
+sh install.sh                                    # ระบุเวอร์ชัน: COSEC_CLI_VERSION=v1.0.0-rc.2 sh install.sh
 ```
 
 **ด้วยมือ**
 
 ```sh
-V=v1.0.0-rc.1; B=https://github.com/epicprosmart-info/cosec-cli/releases/download/$V
+V=v1.0.0-rc.2; B=https://github.com/epicprosmart-info/cosec-cli/releases/download/$V
 curl -fsSLO "$B/cosec-cli_${V}_darwin_arm64.tar.gz" && curl -fsSLO "$B/SHA256SUMS"   # Intel: darwin_amd64
 grep "_darwin_arm64.tar.gz$" SHA256SUMS | shasum -a 256 -c -
 tar -xzf "cosec-cli_${V}_darwin_arm64.tar.gz" cosec-cli && sudo install -m 0755 cosec-cli /usr/local/bin/
@@ -88,13 +88,13 @@ scoop install cosec-cli                          # อัปเกรดภา�
 
 ```powershell
 Invoke-WebRequest https://github.com/epicprosmart-info/cosec-cli/releases/latest/download/install.ps1 -OutFile install.ps1
-powershell -ExecutionPolicy Bypass -File .\install.ps1          # ระบุเวอร์ชัน: -Version v1.0.0-rc.1
+powershell -ExecutionPolicy Bypass -File .\install.ps1          # ระบุเวอร์ชัน: -Version v1.0.0-rc.2
 ```
 
 **ด้วยมือ**
 
 ```powershell
-$v = 'v1.0.0-rc.1'; $b = "https://github.com/epicprosmart-info/cosec-cli/releases/download/$v"
+$v = 'v1.0.0-rc.2'; $b = "https://github.com/epicprosmart-info/cosec-cli/releases/download/$v"
 Invoke-WebRequest "$b/cosec-cli_${v}_windows_amd64.zip" -OutFile cosec-cli.zip      # ARM: windows_arm64
 Invoke-WebRequest "$b/SHA256SUMS" -OutFile SHA256SUMS
 $want = (Select-String -Path SHA256SUMS -Pattern '_windows_amd64\.zip$').Line.Split(' ')[0]
@@ -110,7 +110,7 @@ cosec-cli --version
 
 ```sh
 curl -fsSLO https://github.com/epicprosmart-info/cosec-cli/releases/latest/download/install.sh
-sh install.sh                                    # ระบุเวอร์ชัน: COSEC_CLI_VERSION=v1.0.0-rc.1 sh install.sh
+sh install.sh                                    # ระบุเวอร์ชัน: COSEC_CLI_VERSION=v1.0.0-rc.2 sh install.sh
 ```
 
 สคริปต์ติดตั้งลง `/usr/local/bin` เมื่อเขียนได้ มิฉะนั้นลง `~/.local/bin` และไม่เรียก `sudo` เอง ตั้ง `COSEC_CLI_INSTALL_DIR`
@@ -119,7 +119,7 @@ sh install.sh                                    # ระบุเวอร์�
 **แพ็กเกจ** (Debian/Ubuntu หรือ RHEL/Fedora; ติดตั้ง `/usr/bin/cosec-cli` ไม่มี service ไม่มี dependency)
 
 ```sh
-V=v1.0.0-rc.1; B=https://github.com/epicprosmart-info/cosec-cli/releases/download/$V
+V=v1.0.0-rc.2; B=https://github.com/epicprosmart-info/cosec-cli/releases/download/$V
 curl -fsSLO "$B/cosec-cli_${V#v}_amd64.deb" && curl -fsSLO "$B/SHA256SUMS" && sha256sum -c --ignore-missing SHA256SUMS
 sudo dpkg -i "cosec-cli_${V#v}_amd64.deb"       # RHEL / Fedora: sudo rpm -i cosec-cli_${V#v}_amd64.rpm
 ```
@@ -127,7 +127,7 @@ sudo dpkg -i "cosec-cli_${V#v}_amd64.deb"       # RHEL / Fedora: sudo rpm -i cos
 **ด้วยมือ** (ใช้ใน Dockerfile / runner image ด้วย: pin เวอร์ชัน, layer คงที่)
 
 ```sh
-V=v1.0.0-rc.1; B=https://github.com/epicprosmart-info/cosec-cli/releases/download/$V
+V=v1.0.0-rc.2; B=https://github.com/epicprosmart-info/cosec-cli/releases/download/$V
 curl -fsSLO "$B/cosec-cli_${V}_linux_amd64.tar.gz" && curl -fsSLO "$B/SHA256SUMS"   # ARM: linux_arm64
 sha256sum -c --ignore-missing SHA256SUMS
 tar -xzf "cosec-cli_${V}_linux_amd64.tar.gz" cosec-cli && sudo install -m 0755 cosec-cli /usr/local/bin/
