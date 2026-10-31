@@ -62,7 +62,20 @@ $keep = $false
 try {
   Write-Host "fetching SHA256SUMS from $base"
   try { Invoke-WebRequest -UseBasicParsing -Uri "$base/SHA256SUMS" -OutFile (Join-Path $tmp 'SHA256SUMS') }
-  catch { Fail 1 "cannot download $base/SHA256SUMS (no such release, or no network): $($_.Exception.Message)" }
+  catch {
+    $err = $_.Exception.Message
+    # GitHub's releases/latest skips pre-releases: with only -rc tags published it is a 404. Fall back to the
+    # newest published release (one API call, only on this miss).
+    $newest = $null
+    if ($Version -eq 'latest' -and -not $BaseUrl) {
+      try { $newest = (Invoke-RestMethod -UseBasicParsing -Uri "https://api.github.com/repos/$Repo/releases?per_page=1" -Headers @{ 'User-Agent' = 'cosec-cli-install' })[0].tag_name } catch { }
+    }
+    if ($newest -notmatch '^v\d+\.\d+\.\d+') { Fail 1 "cannot download $base/SHA256SUMS (no such release, or no network): $err" }
+    Write-Host "no final release yet - using the newest pre-release $newest"
+    $Version = $newest; $base = "https://github.com/$Repo/releases/download/$newest"
+    try { Invoke-WebRequest -UseBasicParsing -Uri "$base/SHA256SUMS" -OutFile (Join-Path $tmp 'SHA256SUMS') }
+    catch { Fail 1 "cannot download $base/SHA256SUMS (no such release, or no network): $($_.Exception.Message)" }
+  }
 
   # The zip name carries the tag; SHA256SUMS (a fixed name) tells us which one the release holds.
   $suffix = "_windows_$arch.zip"

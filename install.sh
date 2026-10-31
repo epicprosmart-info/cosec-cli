@@ -95,7 +95,18 @@ cleanup() { [ "$keep" = 1 ] || rm -rf "$tmp"; }
 trap cleanup EXIT INT TERM
 
 log "fetching SHA256SUMS from $base"
-fetch "$base/SHA256SUMS" "$tmp/SHA256SUMS" || die 1 "cannot download $base/SHA256SUMS (no such release, or no network)"
+if ! fetch "$base/SHA256SUMS" "$tmp/SHA256SUMS" 2>/dev/null && [ "$VERSION" = latest ] && [ -z "$BASE" ]; then
+  # GitHub's releases/latest skips pre-releases: with only -rc tags published it is a 404. Fall back to the
+  # newest published release (one API call, only on this miss).
+  fetch "https://api.github.com/repos/$REPO/releases?per_page=1" "$tmp/releases.json" 2>/dev/null || true
+  newest=$(sed -n 's/^ *"tag_name": *"\(v[0-9][^"]*\)".*/\1/p' "$tmp/releases.json" 2>/dev/null | head -1)
+  [ -n "$newest" ] || die 1 "cannot download $base/SHA256SUMS (no such release, or no network)"
+  log "no final release yet — using the newest pre-release $newest"
+  VERSION=$newest; base="https://github.com/$REPO/releases/download/$newest"
+  fetch "$base/SHA256SUMS" "$tmp/SHA256SUMS" || die 1 "cannot download $base/SHA256SUMS (no such release, or no network)"
+elif [ ! -s "$tmp/SHA256SUMS" ]; then
+  die 1 "cannot download $base/SHA256SUMS (no such release, or no network)"
+fi
 # The archive name carries the tag; SHA256SUMS (a fixed name) tells us which one the release holds.
 file=$(awk -v s="_${os}_${arch}.tar.gz" 'index($2, "cosec-cli_") == 1 && substr($2, length($2) - length(s) + 1) == s { print $2; exit }' "$tmp/SHA256SUMS")
 [ -n "$file" ] || die 1 "this release has no build for $os/$arch (see $base/SHA256SUMS)"
