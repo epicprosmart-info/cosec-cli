@@ -1,0 +1,101 @@
+# Lints the install scripts and workflows and runs install.sh against a mock release server
+# (specs/cosec-cli REQ-9.2). No secrets, read-only token. The checkout action is pinned by commit SHA.
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    name: shellcheck + install.sh against a mock release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: sudo apt-get install -y -q shellcheck >/dev/null && shellcheck -s sh install.sh
+      - name: mock release (fake binary, SHA256SUMS) served by python http.server
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG=v9.9.9; M="$RUNNER_TEMP/mock"; mkdir -p "$M/good" "$M/bad"
+          printf '#!/bin/sh\necho "cosec-cli %s (mock/amd64, commit test, built today)"\n' "$TAG" > cosec-cli && chmod +x cosec-cli
+          for a in amd64 arm64; do tar -czf "$M/good/cosec-cli_${TAG}_linux_${a}.tar.gz" cosec-cli; done
+          (cd "$M/good" && sha256sum cosec-cli_* > SHA256SUMS)
+          cp "$M/good/"* "$M/bad/" && echo corrupt >> "$M/bad/cosec-cli_${TAG}_linux_amd64.tar.gz"   # bad: sums no longer match
+          (cd "$M" && nohup python3 -m http.server 8765 --bind 127.0.0.1 >"$M/http.log" 2>&1 &)
+          for _ in $(seq 1 30); do curl -fs -o /dev/null http://127.0.0.1:8765/good/SHA256SUMS && break; sleep 0.2; done
+          echo "MOCK=http://127.0.0.1:8765" >> "$GITHUB_ENV"; echo "TAG=$TAG" >> "$GITHUB_ENV"
+      - name: cases (REQ-9.2)
+        shell: bash
+        run: |
+          set -u
+          fail=0
+          expect() { # NAME WANT_EXIT ENV… — runs install.sh into a fresh dir
+            name=$1 want=$2; shift 2; d=$(mktemp -d)
+            env "$@" COSEC_CLI_INSTALL_DIR="$d" sh install.sh >"$d/out" 2>&1; rc=$?
+            if [ "$rc" = "$want" ]; then echo "PASS $name (exit $rc)"; else echo "FAIL $name: exit $rc want $want"; cat "$d/out"; fail=1; fi
+            echo "$d"
+          }
+          d=$(expect "ok (latest from mirror)" 0 COSEC_CLI_BASE_URL="$MOCK/good" | tail -1); test -x "$d/cosec-cli" || { echo "FAIL ok: binary missing"; fail=1; }
+          d=$(expect "checksum mismatch must not install" 1 COSEC_CLI_BASE_URL="$MOCK/bad" | tail -1); test ! -e "$d/cosec-cli" || { echo "FAIL checksum: binary was installed"; fail=1; }
+          expect "pinned version matches" 0 COSEC_CLI_BASE_URL="$MOCK/good" COSEC_CLI_VERSION="$TAG" >/dev/null
+          expect "pinned version differs" 1 COSEC_CLI_BASE_URL="$MOCK/good" COSEC_CLI_VERSION=v0.0.1 >/dev/null
+          expect "require-sig without cosign" 2 COSEC_CLI_BASE_URL="$MOCK/good" COSEC_CLI_REQUIRE_SIG=1 PATH="/usr/bin:/bin" >/dev/null
+          expect "unknown release (404)" 1 COSEC_CLI_BASE_URL="$MOCK/missing" >/dev/null
+          f=$(mktemp -d)
+          cat > "$f/uname" <<'EOF'
+          #!/bin/sh
+          [ "$1" = -m ] && echo mips || /usr/bin/uname "$@"
+          EOF
+          chmod +x "$f/uname"
+          expect "unsupported arch" 2 COSEC_CLI_BASE_URL="$MOCK/good" PATH="$f:$PATH" >/dev/null
+          sh install.sh --nope >/dev/null 2>&1; rc=$?; if [ "$rc" = 2 ]; then echo "PASS bad argument (exit 2)"; else echo "FAIL bad argument: exit $rc"; fail=1; fi
+          exit $fail
+
+  powershell:
+    name: PSScriptAnalyzer
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) { Install-Module PSScriptAnalyzer -Force -Scope CurrentUser }
+          $r = Invoke-ScriptAnalyzer -Path install.ps1 -Severity Warning,Error
+          $r | Format-Table -AutoSize | Out-String | Write-Host
+          if ($r) { throw "PSScriptAnalyzer reported $($r.Count) finding(s)" }
+          # parses under Windows PowerShell 5.1 too
+          powershell -NoProfile -Command '$null = [ScriptBlock]::Create((Get-Content -Raw install.ps1)); "parsed OK (5.1)"'
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      # macos-15-intel is a real GitHub label that this actionlint release does not know yet
+      - run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color -ignore 'label "macos-15-intel" is unknown'
+
+  cosign-pub-parity:
+    name: cosign.pub equals the keys embedded in the install scripts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - shell: bash
+        run: |
+          set -euo pipefail
+          sh_key=$(awk '/^cat <<.COSIGN_PUB.$/{f=1;next} /^COSIGN_PUB$/{f=0} f' install.sh)
+          ps_key=$(awk '/^\$CosignPub = @.$/{f=1;next} /^.@$/{f=0} f' install.ps1)
+          if [ -f cosign.pub ]; then
+            pub=$(cat cosign.pub)
+            [ "$sh_key" = "$pub" ] || { echo "::error::install.sh embeds a different key than cosign.pub"; exit 1; }
+            [ "$ps_key" = "$pub" ] || { echo "::error::install.ps1 embeds a different key than cosign.pub"; exit 1; }
+            grep -q 'BEGIN PUBLIC KEY' cosign.pub || { echo "::error::cosign.pub is not a PEM public key"; exit 1; }
+            echo "cosign.pub matches both scripts"
+          else
+            if [ -n "$sh_key" ] || [ -n "$ps_key" ]; then echo "::error::scripts embed a key but cosign.pub is missing"; exit 1; fi
+            echo "::notice::releases are unsigned (no cosign.pub) — embedded keys are empty, as expected"
+          fi

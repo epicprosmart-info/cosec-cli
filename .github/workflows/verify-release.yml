@@ -1,0 +1,150 @@
+# Installs every published release on real runners of all three OSes and checks that the repository still
+# holds nothing but install files. No secrets, read-only token (specs/cosec-cli REQ-9.1, NFR-1.5).
+name: verify-release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: release tag to verify (vX.Y.Z)
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  REPO: ${{ github.repository }}
+  PRERELEASE: ${{ github.event.release.prerelease || contains(github.event.release.tag_name || inputs.tag, '-') }}
+
+jobs:
+  install-script:
+    name: install script · ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'macos-15-intel' }}
+    steps:
+      - name: install.sh from the release
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sumcheck() { if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; }
+          curl -fsSLO "https://github.com/$REPO/releases/download/$TAG/install.sh"
+          curl -fsSLO "https://github.com/$REPO/releases/download/$TAG/SHA256SUMS"
+          grep ' install.sh$' SHA256SUMS | sumcheck
+          mkdir -p "$HOME/.local/bin"
+          COSEC_CLI_VERSION="$TAG" COSEC_CLI_INSTALL_DIR="$HOME/.local/bin" sh install.sh
+          out=$("$HOME/.local/bin/cosec-cli" --version)
+          echo "$out"
+          case $out in "cosec-cli $TAG ("*) ;; *) echo "::error::--version does not report $TAG"; exit 1 ;; esac
+          if [ "$RUNNER_OS" = Linux ]; then file "$HOME/.local/bin/cosec-cli" | grep -q 'statically linked' || { echo "::error::binary is not static"; exit 1; }; fi
+      - name: require-sig (only when the release is signed)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! curl -fsSL -o /dev/null "https://github.com/$REPO/releases/download/$TAG/SHA256SUMS.sig"; then
+            echo "::notice::release $TAG has no SHA256SUMS.sig — signature test skipped"; exit 0; fi
+          os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+          CV=v2.4.1; CB=https://github.com/sigstore/cosign/releases/download/$CV
+          curl -fsSLO "$CB/cosign-$os-$arch" && curl -fsSLO "$CB/cosign_checksums.txt"
+          if command -v sha256sum >/dev/null; then grep " cosign-$os-$arch$" cosign_checksums.txt | sha256sum -c -; else grep " cosign-$os-$arch$" cosign_checksums.txt | shasum -a 256 -c -; fi
+          install -m 0755 "cosign-$os-$arch" "$HOME/.local/bin/cosign"
+          COSEC_CLI_VERSION="$TAG" COSEC_CLI_INSTALL_DIR="$HOME/.local/bin" COSEC_CLI_REQUIRE_SIG=1 PATH="$HOME/.local/bin:$PATH" sh install.sh
+      - name: install.ps1 from the release
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest "https://github.com/$env:REPO/releases/download/$env:TAG/install.ps1" -OutFile install.ps1
+          Invoke-WebRequest "https://github.com/$env:REPO/releases/download/$env:TAG/SHA256SUMS" -OutFile SHA256SUMS
+          $want = (Select-String -Path SHA256SUMS -Pattern ' install\.ps1$').Line.Split(' ')[0]
+          if ((Get-FileHash install.ps1 -Algorithm SHA256).Hash.ToLower() -ne $want) { throw 'install.ps1 checksum mismatch' }
+          $dir = Join-Path $env:RUNNER_TEMP 'cosec-cli'
+          powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Version $env:TAG -InstallDir $dir
+          $out = & (Join-Path $dir 'cosec-cli.exe') --version
+          Write-Host $out
+          if (-not $out.StartsWith("cosec-cli $env:TAG (")) { throw "--version does not report $env:TAG" }
+          if (-not (([Environment]::GetEnvironmentVariable('Path', 'User') -split ';') -contains $dir)) { throw 'install dir not on the user PATH' }
+      - name: install.ps1 under Windows PowerShell 5.1
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'cosec-cli-ps51'
+          .\install.ps1 -Version $env:TAG -InstallDir $dir
+          $out = & (Join-Path $dir 'cosec-cli.exe') --version
+          if (-not $out.StartsWith("cosec-cli $env:TAG (")) { throw "--version does not report $env:TAG" }
+
+  brew:
+    name: Homebrew tap
+    if: ${{ !(github.event.release.prerelease || contains(github.event.release.tag_name || inputs.tag, '-')) }}
+    runs-on: macos-15
+    steps:
+      - shell: bash
+        run: |
+          set -euo pipefail
+          brew tap epicprosmart-info/tap
+          brew install cosec-cli
+          brew test cosec-cli
+          out=$(cosec-cli --version); echo "$out"
+          case $out in "cosec-cli $TAG ("*) ;; *) echo "::error::tap formula is not $TAG yet"; exit 1 ;; esac
+      - name: brew audit
+        continue-on-error: true
+        run: brew audit --formula epicprosmart-info/tap/cosec-cli
+
+  scoop:
+    name: Scoop bucket
+    if: ${{ !(github.event.release.prerelease || contains(github.event.release.tag_name || inputs.tag, '-')) }}
+    runs-on: windows-2025
+    steps:
+      - shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-RestMethod get.scoop.sh -OutFile install-scoop.ps1
+          .\install-scoop.ps1 -RunAsAdmin
+          $env:Path = "$env:USERPROFILE\scoop\shims;$env:Path"
+          scoop bucket add epicprosmart-info https://github.com/epicprosmart-info/scoop-bucket
+          scoop install cosec-cli
+          $out = cosec-cli --version; Write-Host $out
+          if (-not $out.StartsWith("cosec-cli $env:TAG (")) { throw "bucket manifest is not $env:TAG yet" }
+
+  deb-rpm:
+    name: deb + rpm
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: bash
+        run: |
+          set -euo pipefail
+          V=${TAG#v}; B="https://github.com/$REPO/releases/download/$TAG"
+          curl -fsSLO "$B/SHA256SUMS" && curl -fsSLO "$B/cosec-cli_${V}_amd64.deb" && curl -fsSLO "$B/cosec-cli_${V}_amd64.rpm"
+          sha256sum -c --ignore-missing SHA256SUMS
+          extra=$(dpkg -c "cosec-cli_${V}_amd64.deb" | awk '{print $6}' | grep -vE '^\./(usr/(bin/(cosec-cli)?)?)?$' || true)
+          if [ -n "$extra" ]; then echo "::error::deb contains more than /usr/bin/cosec-cli: $extra"; exit 1; fi
+          sudo dpkg -i "cosec-cli_${V}_amd64.deb"
+          out=$(/usr/bin/cosec-cli --version); echo "$out"
+          case $out in "cosec-cli $TAG ("*) ;; *) echo "::error::deb --version does not report $TAG"; exit 1 ;; esac
+          docker run --rm -v "$PWD:/w" -e TAG fedora:41 bash -c '
+            set -e; rpm -qlp /w/cosec-cli_*.rpm | grep -vE "^/usr/bin/cosec-cli$" && { echo "::error::rpm contains more than /usr/bin/cosec-cli"; exit 1; }
+            rpm -i /w/cosec-cli_*.rpm && out=$(/usr/bin/cosec-cli --version) && echo "$out" && case $out in "cosec-cli $TAG ("*) ;; *) exit 1 ;; esac'
+
+  no-source:
+    name: repository holds install files only
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/$REPO/archive/refs/tags/$TAG.tar.gz" | tar -tz | sed -E 's#^[^/]+/##' | grep -v '^$' | sort -u > files.txt
+          cat files.txt
+          bad=$(grep -vE '^(README(\.th)?\.md|LICENSE\.md|SECURITY\.md|install\.sh|install\.ps1|cosign\.pub|\.github/(workflows/([^/]+\.ya?ml)?)?)$' files.txt || true)
+          [ -z "$bad" ] || { printf '::error::unexpected files in the source archive:\n%s\n' "$bad"; exit 1; }
+          curl -fsSLO "https://github.com/$REPO/releases/download/$TAG/SHA256SUMS"
+          bad=$(awk '{print $2}' SHA256SUMS | grep -vE "^(cosec-cli_${TAG}_(linux|darwin|windows)_(amd64|arm64)\.(tar\.gz|zip)(\.cdx\.json)?|cosec-cli_${TAG#v}_(amd64|arm64)\.(deb|rpm)|install\.sh|install\.ps1|cosign\.pub)$" || true)
+          [ -z "$bad" ] || { printf '::error::unexpected release assets:\n%s\n' "$bad"; exit 1; }
