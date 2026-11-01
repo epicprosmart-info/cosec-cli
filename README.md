@@ -179,7 +179,7 @@ flowchart TD
 
 | Variable | Example | Notes |
 |---|---|---|
-| `COSEC_URL` | `https://cosec.example.com` | `https://` only; `http://` is refused except for localhost |
+| `COSEC_URL` | `https://cosec-shield.epicprosmart.com` | `https://` only; `http://` is refused except for localhost |
 | `COSEC_PROJECT` | `01H…` | or `--project` |
 | `COSEC_TOKEN` | `cst_…` | **secret**; read only from the environment, never a flag |
 
@@ -207,7 +207,7 @@ sequenceDiagram
 ```
 
 ```sh
-export COSEC_URL=https://cosec.example.com COSEC_PROJECT=01H…    # COSEC_TOKEN comes from your CI secret store
+export COSEC_URL=https://cosec-shield.epicprosmart.com COSEC_PROJECT=01H…    # COSEC_TOKEN comes from your CI secret store
 syft . -o cyclonedx-json > project_sbom.json
 cosec-cli --file project_sbom.json --commit "$(git rev-parse HEAD)" --timeout 5m
 ```

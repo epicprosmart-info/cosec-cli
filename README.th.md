@@ -183,7 +183,7 @@ flowchart TD
 
 | ตัวแปร | ตัวอย่าง | หมายเหตุ |
 |---|---|---|
-| `COSEC_URL` | `https://cosec.example.com` | ต้องเป็น `https://`; ปฏิเสธ `http://` ยกเว้น localhost |
+| `COSEC_URL` | `https://cosec-shield.epicprosmart.com` | ต้องเป็น `https://`; ปฏิเสธ `http://` ยกเว้น localhost |
 | `COSEC_PROJECT` | `01H…` | หรือใช้ `--project` |
 | `COSEC_TOKEN` | `cst_…` | **ความลับ**; อ่านจาก environment เท่านั้น ไม่มี flag |
 
@@ -215,7 +215,7 @@ sequenceDiagram
 ```
 
 ```sh
-export COSEC_URL=https://cosec.example.com COSEC_PROJECT=01H…    # COSEC_TOKEN มาจาก secret store ของ CI
+export COSEC_URL=https://cosec-shield.epicprosmart.com COSEC_PROJECT=01H…    # COSEC_TOKEN มาจาก secret store ของ CI
 syft . -o cyclonedx-json > project_sbom.json
 cosec-cli --file project_sbom.json --commit "$(git rev-parse HEAD)" --timeout 5m
 ```
