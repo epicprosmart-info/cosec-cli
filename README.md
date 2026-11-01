@@ -6,7 +6,7 @@ Command-line client for [CoSec Shield](https://cosec-shield.epicprosmart.com): u
 the build when the project's gate says `fail`, inspect threat-case exposure (`case php2shell`), verify encrypted
 audit files offline (`audit verify`), and connect an AI agent through the MCP bridge (`mcp connect`).
 
-One static binary, no runtime, for **Linux, macOS and Windows** on amd64 and arm64. Latest release: **v1.0.0-rc.3**.
+One static binary, no runtime, for **Linux, macOS and Windows** on amd64 and arm64. Latest release: **v1.0.0-rc.4**.
 
 > This repository distributes **binaries only**. It contains no source code; the "Source code" archives GitHub
 > attaches to every release hold nothing but the files on this page.
@@ -58,13 +58,13 @@ brew install epicprosmart-info/tap/cosec-cli      # later: brew upgrade cosec-cl
 
 ```sh
 curl -fsSLO https://github.com/epicprosmart-info/cosec-cli/releases/latest/download/install.sh
-sh install.sh                                    # pin: COSEC_CLI_VERSION=v1.0.0-rc.3 sh install.sh
+sh install.sh                                    # pin: COSEC_CLI_VERSION=v1.0.0-rc.4 sh install.sh
 ```
 
 **By hand**
 
 ```sh
-V=v1.0.0-rc.3; B=https://github.com/epicprosmart-info/cosec-cli/releases/download/$V
+V=v1.0.0-rc.4; B=https://github.com/epicprosmart-info/cosec-cli/releases/download/$V
 curl -fsSLO "$B/cosec-cli_${V}_darwin_arm64.tar.gz" && curl -fsSLO "$B/SHA256SUMS"   # Intel: darwin_amd64
 grep "_darwin_arm64.tar.gz$" SHA256SUMS | shasum -a 256 -c -
 tar -xzf "cosec-cli_${V}_darwin_arm64.tar.gz" cosec-cli && sudo install -m 0755 cosec-cli /usr/local/bin/
@@ -87,13 +87,13 @@ scoop install cosec-cli                          # later: scoop update cosec-cli
 
 ```powershell
 Invoke-WebRequest https://github.com/epicprosmart-info/cosec-cli/releases/latest/download/install.ps1 -OutFile install.ps1
-powershell -ExecutionPolicy Bypass -File .\install.ps1          # pin: -Version v1.0.0-rc.3
+powershell -ExecutionPolicy Bypass -File .\install.ps1          # pin: -Version v1.0.0-rc.4
 ```
 
 **By hand**
 
 ```powershell
-$v = 'v1.0.0-rc.3'; $b = "https://github.com/epicprosmart-info/cosec-cli/releases/download/$v"
+$v = 'v1.0.0-rc.4'; $b = "https://github.com/epicprosmart-info/cosec-cli/releases/download/$v"
 Invoke-WebRequest "$b/cosec-cli_${v}_windows_amd64.zip" -OutFile cosec-cli.zip      # ARM: windows_arm64
 Invoke-WebRequest "$b/SHA256SUMS" -OutFile SHA256SUMS
 $want = (Select-String -Path SHA256SUMS -Pattern '_windows_amd64\.zip$').Line.Split(' ')[0]
@@ -109,7 +109,7 @@ cosec-cli --version
 
 ```sh
 curl -fsSLO https://github.com/epicprosmart-info/cosec-cli/releases/latest/download/install.sh
-sh install.sh                                    # pin: COSEC_CLI_VERSION=v1.0.0-rc.3 sh install.sh
+sh install.sh                                    # pin: COSEC_CLI_VERSION=v1.0.0-rc.4 sh install.sh
 ```
 
 The script installs to `/usr/local/bin` when that is writable, otherwise to `~/.local/bin`, and never calls
@@ -118,7 +118,7 @@ The script installs to `/usr/local/bin` when that is writable, otherwise to `~/.
 **Package** (Debian/Ubuntu or RHEL/Fedora; installs `/usr/bin/cosec-cli`, no service, no dependencies)
 
 ```sh
-V=v1.0.0-rc.3; B=https://github.com/epicprosmart-info/cosec-cli/releases/download/$V
+V=v1.0.0-rc.4; B=https://github.com/epicprosmart-info/cosec-cli/releases/download/$V
 curl -fsSLO "$B/cosec-cli_${V#v}_amd64.deb" && curl -fsSLO "$B/SHA256SUMS" && sha256sum -c --ignore-missing SHA256SUMS
 sudo dpkg -i "cosec-cli_${V#v}_amd64.deb"       # RHEL / Fedora: sudo rpm -i cosec-cli_${V#v}_amd64.rpm
 ```
@@ -126,7 +126,7 @@ sudo dpkg -i "cosec-cli_${V#v}_amd64.deb"       # RHEL / Fedora: sudo rpm -i cos
 **By hand** (also for Dockerfiles and runner images: pinned version, static layer)
 
 ```sh
-V=v1.0.0-rc.3; B=https://github.com/epicprosmart-info/cosec-cli/releases/download/$V
+V=v1.0.0-rc.4; B=https://github.com/epicprosmart-info/cosec-cli/releases/download/$V
 curl -fsSLO "$B/cosec-cli_${V}_linux_amd64.tar.gz" && curl -fsSLO "$B/SHA256SUMS"   # ARM: linux_arm64
 sha256sum -c --ignore-missing SHA256SUMS
 tar -xzf "cosec-cli_${V}_linux_amd64.tar.gz" cosec-cli && sudo install -m 0755 cosec-cli /usr/local/bin/
